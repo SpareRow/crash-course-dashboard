@@ -1,0 +1,626 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Crash Course Tracker</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+<style>
+:root {
+  color-scheme: light;
+  --page: #f9f9f7;
+  --surface: #fcfcfb;
+  --ink: #0b0b0b;
+  --ink-2: #52514e;
+  --muted: #898781;
+  --grid: #e1e0d9;
+  --axis: #c3c2b7;
+  --ring: rgba(11,11,11,0.10);
+  --s1: #2a78d6;      /* paperback · in stock */
+  --s1-track: #cde2fb;
+  --s2: #eb6834;      /* kindle */
+  --s3: #1baf7a;      /* audible */
+  --out: #c3c2b7;     /* out of stock */
+  --good: #006300;
+  --bad: #d03b3b;
+}
+@media (prefers-color-scheme: dark) {
+  :root:where(:not([data-theme="light"])) {
+    color-scheme: dark;
+    --page: #0d0d0d; --surface: #1a1a19; --ink: #f0efec; --ink-2: #c3c2b7; --muted: #898781;
+    --grid: #2c2c2a; --axis: #383835; --ring: rgba(255,255,255,0.10);
+    --s1: #3987e5; --s1-track: #184f95; --s2: #d95926; --s3: #199e70; --out: #52514e;
+    --good: #0ca30c; --bad: #e66767;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --page: #0d0d0d; --surface: #1a1a19; --ink: #f0efec; --ink-2: #c3c2b7; --muted: #898781;
+  --grid: #2c2c2a; --axis: #383835; --ring: rgba(255,255,255,0.10);
+  --s1: #3987e5; --s1-track: #184f95; --s2: #d95926; --s3: #199e70; --out: #52514e;
+  --good: #0ca30c; --bad: #e66767;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0; background: var(--page); color: var(--ink);
+  font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+.wrap { max-width: 1180px; margin: 0 auto; padding: 24px 16px 48px; }
+header { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; margin-bottom: 20px; }
+h1 { font-size: 22px; font-weight: 650; margin: 0 0 2px; letter-spacing: -0.01em; }
+h2 { font-size: 15px; font-weight: 600; margin: 0 0 2px; }
+.sub { color: var(--ink-2); margin: 0; }
+.cap { color: var(--muted); font-size: 12.5px; margin: 0 0 12px; }
+button.theme {
+  background: var(--surface); color: var(--ink-2); border: 1px solid var(--ring); border-radius: 8px;
+  padding: 6px 10px; font: inherit; font-size: 12.5px; cursor: pointer; white-space: nowrap;
+}
+.card { background: var(--surface); border: 1px solid var(--ring); border-radius: 12px; padding: 16px; min-width: 0; }
+.notice { border-left: 3px solid var(--bad); margin-bottom: 16px; color: var(--ink-2); }
+.notice b { color: var(--ink); }
+
+/* Stat tiles */
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; margin-bottom: 16px; }
+.tile .label { color: var(--ink-2); font-size: 12.5px; }
+.tile .value { font-size: 26px; font-weight: 600; margin: 2px 0; letter-spacing: -0.01em; }
+.tile .detail { color: var(--muted); font-size: 12px; }
+.delta { font-size: 12px; font-weight: 600; margin-left: 4px; }
+.delta.good { color: var(--good); } .delta.bad { color: var(--bad); } .delta.flat { color: var(--ink-2); }
+
+/* Map */
+.seg { display: inline-flex; border: 1px solid var(--ring); border-radius: 8px; overflow: hidden; margin: 4px 0 12px; }
+.seg button { background: transparent; border: 0; padding: 6px 12px; font: inherit; font-size: 13px; color: var(--ink-2); cursor: pointer; }
+.seg button[aria-pressed="true"] { background: var(--page); color: var(--ink); font-weight: 600; }
+#map { height: 460px; border-radius: 8px; border: 1px solid var(--ring); background: var(--page); }
+.leaflet-container { font: inherit; }
+.leaflet-tooltip { background: var(--surface); color: var(--ink); border: 1px solid var(--ring); box-shadow: 0 2px 8px rgba(0,0,0,.12); border-radius: 8px; padding: 6px 9px; }
+.leaflet-tooltip-top:before { border-top-color: var(--surface); }
+.tt-v { font-weight: 650; font-size: 13.5px; } .tt-l { color: var(--ink-2); font-size: 12px; }
+.legend { display: flex; flex-wrap: wrap; gap: 16px; margin-top: 10px; color: var(--ink-2); font-size: 12.5px; align-items: center; }
+.key { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; vertical-align: -1px; }
+
+/* Layout grids */
+.grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(340px, 100%), 1fr)); gap: 16px; margin-top: 16px; }
+.grid3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(300px, 100%), 1fr)); gap: 16px; margin-top: 16px; }
+section > h2.section { font-size: 17px; margin: 32px 0 4px; }
+
+/* Bar lists */
+.bars { display: grid; grid-template-columns: minmax(90px, max-content) 1fr; gap: 7px 12px; align-items: center; }
+.bars.scroll { max-height: 360px; overflow-y: auto; padding-right: 4px; }
+.bars .name { color: var(--ink-2); font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bars .row { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.bars .barbox { flex: 1; max-width: 220px; min-width: 40px; }
+.bars .bar { height: 10px; border-radius: 0 4px 4px 0; background: var(--s1); min-width: 2px; }
+.bars .track { flex: 1; height: 10px; background: var(--s1-track); border-radius: 0 4px 4px 0; position: relative; min-width: 40px; max-width: 220px; }
+.bars .track > i { position: absolute; inset: 0 auto 0 0; background: var(--s1); border-radius: 0 4px 4px 0; }
+.bars .val { font-size: 12.5px; color: var(--ink); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.bars .val small { color: var(--muted); font-size: 12px; }
+
+/* Line charts */
+.chart { position: relative; }
+.chart svg { display: block; width: 100%; overflow: visible; }
+.chart .tip {
+  position: absolute; pointer-events: none; background: var(--surface); border: 1px solid var(--ring);
+  border-radius: 8px; padding: 6px 9px; box-shadow: 0 2px 8px rgba(0,0,0,.12); font-size: 12px; display: none; z-index: 2; white-space: nowrap;
+}
+.chart .tip .d { color: var(--muted); margin-bottom: 2px; }
+.chart .tip .r { display: flex; align-items: center; gap: 6px; }
+.chart .tip .r b { font-size: 13px; }
+.chart .tip .r i { display: inline-block; width: 12px; height: 2px; border-radius: 1px; }
+.chart .tip .r span { color: var(--ink-2); }
+.chart-legend { display: flex; gap: 14px; flex-wrap: wrap; color: var(--ink-2); font-size: 12px; margin-bottom: 6px; }
+.chart-legend i { display: inline-block; width: 14px; height: 2px; border-radius: 1px; margin-right: 5px; vertical-align: 3px; }
+.empty-note { color: var(--muted); font-size: 12px; margin-top: 4px; }
+
+/* Tables */
+.tbl-wrap { overflow-x: auto; }
+.tbl-wrap.tall { max-height: 380px; overflow-y: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th, td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--grid); white-space: nowrap; }
+td.wrapcell { white-space: normal; min-width: 160px; color: var(--ink-2); }
+th { color: var(--muted); font-weight: 500; font-size: 12px; position: sticky; top: 0; background: var(--surface); }
+td.n, th.n { text-align: right; font-variant-numeric: tabular-nums; }
+td .muted { color: var(--muted); }
+input.search {
+  background: var(--page); color: var(--ink); border: 1px solid var(--ring); border-radius: 8px;
+  padding: 6px 10px; font: inherit; font-size: 13px; width: 100%; max-width: 260px; margin-bottom: 10px;
+}
+footer { margin-top: 32px; color: var(--ink-2); font-size: 12.5px; }
+footer li { margin-bottom: 4px; }
+@media (max-width: 600px) {
+  header { flex-direction: column; }
+  #map { height: 360px; }
+  .tile .value { font-size: 22px; }
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <h1>Crash Course · sales signals</h1>
+      <p class="sub" id="subtitle">Piper Lawson · Berkley XO</p>
+    </div>
+    <button class="theme" id="themeBtn" type="button">Theme: auto</button>
+  </header>
+
+  <div id="notice"></div>
+  <div class="tiles" id="tiles"></div>
+
+  <div class="card">
+    <h2>Where the book is on shelves</h2>
+    <p class="cap" id="mapCap"></p>
+    <div class="seg" role="group" aria-label="Retailer">
+      <button type="button" data-layer="indigo" aria-pressed="true">Indigo · copies on hand</button>
+      <button type="button" data-layer="bn" aria-pressed="false">Barnes &amp; Noble · in stock</button>
+    </div>
+    <div id="map" role="img" aria-label="Map of stores carrying Crash Course"></div>
+    <div class="legend" id="mapLegend"></div>
+  </div>
+
+  <div class="grid2">
+    <div class="card">
+      <h2>Indigo copies by province</h2>
+      <p class="cap">Copies on hand at named stores · stores in stock</p>
+      <div class="bars" id="provBars"></div>
+    </div>
+    <div class="card">
+      <h2>B&amp;N stores in stock by state</h2>
+      <p class="cap">Share of stores showing in stock, lowest first</p>
+      <div class="bars scroll" id="stateBars"></div>
+    </div>
+  </div>
+
+  <section>
+    <h2 class="section">Trends</h2>
+    <p class="cap" id="trendCap"></p>
+    <div class="grid3" id="trends"></div>
+  </section>
+
+  <section>
+    <h2 class="section">Detail</h2>
+    <div class="grid2">
+      <div class="card">
+        <h2>Amazon</h2>
+        <p class="cap">Best Sellers Rank (lower is better). Ratings are shared across formats.</p>
+        <div class="tbl-wrap"><table id="amazonTbl"></table></div>
+      </div>
+      <div class="card">
+        <h2>Libraries (OverDrive / Libby)</h2>
+        <p class="cap">Copies owned and holds, ebook and audiobook</p>
+        <div class="tbl-wrap"><table id="libTbl"></table></div>
+      </div>
+    </div>
+    <div class="grid2">
+      <div class="card">
+        <h2>Indigo stores</h2>
+        <p class="cap">Copies on hand today, change since previous snapshot</p>
+        <input class="search" id="storeSearch" type="search" placeholder="Filter by store, city or province" aria-label="Filter Indigo stores">
+        <div class="tbl-wrap tall"><table id="storeTbl"></table></div>
+      </div>
+      <div class="card">
+        <h2>Bestseller lists</h2>
+        <p class="cap">NYT via API; other lists entered by hand</p>
+        <div class="tbl-wrap"><table id="listTbl"></table></div>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <h2>Reading these numbers</h2>
+    <ul>
+      <li><b>These are proxies, not sales.</b> Real point-of-sale numbers come from BookScan (PRH Author Portal) and BookNet Canada.</li>
+      <li><b>Indigo shelf drawdown</b> counts copies that left named stores since the previous day: mostly sales, plus some transfers and returns. A same-day restock hides sales, so read weekly totals.</li>
+      <li><b>Indigo warehouse &amp; online</b> is stock at locations that aren't stores (distribution centres, online fulfilment, plus a few stores not yet identified).</li>
+      <li><b>Barnes &amp; Noble</b> only shows whether a store has the book, not how many copies.</li>
+      <li>Collected once a day from public retailer pages. <span id="generated"></span></li>
+    </ul>
+  </footer>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<script>
+"use strict";
+const fmt = v => v == null ? "—" : Number(v).toLocaleString("en-US");
+const css = name => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+const el = (tag, attrs = {}, ...kids) => {
+  const e = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) {
+    if (k === "class") e.className = v; else if (k === "style") e.style.cssText = v; else e.setAttribute(k, v);
+  }
+  for (const k of kids) if (k != null) e.append(k.nodeType ? k : document.createTextNode(String(k)));
+  return e;
+};
+const shortDate = d => new Date(d + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" });
+
+/* ── Theme toggle ─────────────────────────────────────────────── */
+const THEMES = ["auto", "light", "dark"];
+let theme = "auto";
+try { theme = localStorage.getItem("cc-theme") || "auto"; } catch (e) {}
+function applyTheme() {
+  if (theme === "auto") document.documentElement.removeAttribute("data-theme");
+  else document.documentElement.setAttribute("data-theme", theme);
+  document.getElementById("themeBtn").textContent = "Theme: " + theme;
+}
+applyTheme();
+document.getElementById("themeBtn").addEventListener("click", () => {
+  theme = THEMES[(THEMES.indexOf(theme) + 1) % 3];
+  try { localStorage.setItem("cc-theme", theme); } catch (e) {}
+  applyTheme(); rerender();
+});
+matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => rerender());
+const isDark = () => theme === "dark" || (theme === "auto" && matchMedia("(prefers-color-scheme: dark)").matches);
+
+let DATA, map, tileLayer, mapLayers = {}, activeLayer = "indigo";
+
+fetch("data.json", { cache: "no-store" }).then(r => r.json()).then(d => { DATA = d; render(); })
+  .catch(e => { document.getElementById("notice").append(el("div", { class: "card notice" }, "Could not load data.json: " + e)); });
+
+function render() {
+  const d = DATA, h = d.history, cur = h[h.length - 1] || {}, prev = h.length > 1 ? h[h.length - 2] : null;
+  document.getElementById("subtitle").textContent =
+    `Piper Lawson · Berkley XO · on sale ${shortDate(d.pub_date)} · snapshot ${shortDate(d.latest_date)}` +
+    (prev ? ` (changes vs ${shortDate(prev.date)})` : "");
+  document.getElementById("generated").textContent = `Last built ${new Date(d.generated_at).toLocaleString()}.`;
+
+  const notice = document.getElementById("notice");
+  notice.replaceChildren();
+  if (d.failed_sources.length) {
+    notice.append(el("div", { class: "card notice" }, el("b", {}, "Not updated today: "),
+      d.failed_sources.map(f => f.source).join(", "), " (showing the latest successful data where available)."));
+  }
+
+  renderTiles(cur, prev);
+  renderMap();
+  renderProvinces();
+  renderStates();
+  renderTrends();
+  renderTables();
+}
+function rerender() { if (DATA) { renderMapTiles(); renderMapLayers(); renderTrends(); } }
+
+/* ── Stat tiles ───────────────────────────────────────────────── */
+function renderTiles(cur, prev) {
+  const holds = (cur.library_us_holds || 0) + (cur.library_ca_holds || 0);
+  const copies = (cur.library_us_copies || 0) + (cur.library_ca_copies || 0);
+  const prevHolds = prev ? (prev.library_us_holds || 0) + (prev.library_ca_holds || 0) : null;
+  const tiles = [
+    { label: "Copies on Indigo shelves", value: fmt(cur.indigo_store_copies), key: "indigo_store_copies", dir: 0,
+      detail: `at ${fmt(cur.indigo_stores_in_stock)} of ${fmt(cur.indigo_stores_named)} stores` },
+    { label: "Indigo warehouse & online", value: fmt(cur.indigo_dc_and_other_copies), key: "indigo_dc_and_other_copies", dir: 0,
+      detail: "copies at non-store locations" },
+    { label: "B&N stores in stock", value: cur.bn_pct_in_stock == null ? "—" : cur.bn_pct_in_stock + "%", key: "bn_pct_in_stock", dir: 0,
+      detail: `${fmt(cur.bn_stores_in_stock)} of ${fmt(cur.bn_stores_checked)} stores` },
+    { label: "Amazon.com Kindle rank", value: cur.amazon_com_kindle_rank ? "#" + fmt(cur.amazon_com_kindle_rank) : "—", key: "amazon_com_kindle_rank", dir: -1,
+      detail: `paperback #${fmt(cur.amazon_com_paperback_rank)} · Audible #${fmt(cur.amazon_com_audible_rank)}` },
+    { label: "Goodreads want to read", value: fmt(cur.goodreads_want_to_read), key: "goodreads_want_to_read", dir: 1,
+      detail: `${fmt(cur.goodreads_rating_count)} ratings · ★ ${cur.goodreads_avg_rating ?? "—"}` },
+    { label: "Library holds", value: fmt(holds), raw: holds, prevRaw: prevHolds, dir: 1,
+      detail: `on ${fmt(copies)} copies across ${DATA.libraries.length} systems` },
+  ];
+  const box = document.getElementById("tiles");
+  box.replaceChildren();
+  for (const t of tiles) {
+    const now = t.key ? cur[t.key] : t.raw, before = t.key ? prev?.[t.key] : t.prevRaw;
+    let delta = null;
+    if (now != null && before != null && now !== before) {
+      const diff = Math.round((now - before) * 10) / 10;
+      const cls = t.dir === 0 ? "flat" : (Math.sign(diff) === t.dir ? "good" : "bad");
+      const arrow = diff > 0 ? "▲" : "▼";
+      delta = el("span", { class: "delta " + cls, title: "vs previous snapshot" }, `${arrow} ${fmt(Math.abs(diff))}`);
+    }
+    box.append(el("div", { class: "card tile" },
+      el("div", { class: "label" }, t.label),
+      el("div", { class: "value" }, t.value, delta),
+      el("div", { class: "detail" }, t.detail)));
+  }
+}
+
+/* ── Map ──────────────────────────────────────────────────────── */
+function tipContent(value, lines) {
+  const box = el("div", {}, el("div", { class: "tt-v" }, value));
+  for (const l of lines) box.append(el("div", { class: "tt-l" }, l));
+  return box;
+}
+function renderMap() {
+  if (!map) {
+    map = L.map("map", { scrollWheelZoom: false, worldCopyJump: true, zoomSnap: 0.25 });
+    document.querySelectorAll(".seg button").forEach(b => b.addEventListener("click", () => {
+      activeLayer = b.dataset.layer;
+      document.querySelectorAll(".seg button").forEach(x => x.setAttribute("aria-pressed", String(x === b)));
+      renderMapLayers(true);
+    }));
+  }
+  renderMapTiles();
+  renderMapLayers(true);
+}
+function renderMapTiles() {
+  if (tileLayer) map.removeLayer(tileLayer);
+  const style = isDark() ? "World_Dark_Gray_Base" : "World_Light_Gray_Base";
+  tileLayer = L.tileLayer(`https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/${style}/MapServer/tile/{z}/{y}/{x}`, {
+    attribution: "Tiles &copy; Esri &mdash; Esri, HERE, Garmin, &copy; OpenStreetMap contributors",
+    maxZoom: 16,
+  }).addTo(map);
+}
+function renderMapLayers(fit) {
+  Object.values(mapLayers).forEach(l => map.removeLayer(l));
+  const surface = css("--surface"), s1 = css("--s1"), out = css("--out");
+  const markers = [];
+  const legend = document.getElementById("mapLegend"), cap = document.getElementById("mapCap");
+  legend.replaceChildren();
+  if (activeLayer === "indigo") {
+    const stores = DATA.indigo_stores.filter(s => s.lat != null);
+    // Big circles underneath small ones; empty stores last so they stay visible
+    stores.sort((a, b) => (a.qty === 0) - (b.qty === 0) || b.qty - a.qty);
+    for (const s of stores) {
+      const has = s.qty > 0;
+      const m = L.circleMarker([s.lat, s.lon], {
+        radius: has ? 4 + 2.6 * Math.sqrt(s.qty) : 4.5,
+        color: has ? surface : out, weight: has ? 2 : 2,
+        fillColor: has ? s1 : surface, fillOpacity: has ? 0.85 : 1,
+      });
+      const change = s.prev_qty == null ? null : s.qty - s.prev_qty;
+      m.bindTooltip(tipContent(`${s.qty} ${s.qty === 1 ? "copy" : "copies"}`,
+        [`${s.banner} ${s.name}`, `${s.city}, ${s.province}`].concat(change ? [`${change > 0 ? "+" : ""}${change} since last snapshot`] : [])),
+        { direction: "top", offset: [0, -6] });
+      markers.push(m);
+    }
+    const missing = DATA.indigo_stores.length - stores.length;
+    cap.textContent = `Circle size = copies on hand at each Indigo, Chapters, Coles and Indigospirit store.` +
+      (missing ? ` ${missing} stores have no map location yet and appear only in the tables.` : "");
+    legend.append(
+      el("span", {}, el("span", { class: "key", style: `background:${s1}` }), "In stock (larger = more copies)"),
+      el("span", {}, el("span", { class: "key", style: `background:${surface};border:2px solid ${out}` }), "No copies"));
+  } else {
+    // Out-of-stock stores drawn last so they aren't buried in dense metros
+    const stores = DATA.bn_stores.filter(s => s.lat != null).sort((a, b) => b.available - a.available);
+    for (const s of stores) {
+      const has = s.available === 1;
+      const m = L.circleMarker([s.lat, s.lon], {
+        radius: 5, color: has ? surface : out, weight: has ? 1.5 : 2,
+        fillColor: has ? s1 : surface, fillOpacity: has ? 0.85 : 1,
+      });
+      const flip = s.prev_available == null || s.prev_available === s.available ? [] :
+        [has ? "Restocked since last snapshot" : "Sold out since last snapshot"];
+      m.bindTooltip(tipContent(has ? "In stock" : "Out of stock", [`B&N ${s.name}`, `${s.city}, ${s.state}`].concat(flip)),
+        { direction: "top", offset: [0, -6] });
+      markers.push(m);
+    }
+    cap.textContent = "Each dot is a Barnes & Noble store (placed at its ZIP code). B&N shows in stock / out of stock only, not copy counts.";
+    legend.append(
+      el("span", {}, el("span", { class: "key", style: `background:${s1}` }), "In stock"),
+      el("span", {}, el("span", { class: "key", style: `background:${surface};border:2px solid ${out}` }), "Out of stock"));
+  }
+  mapLayers[activeLayer] = L.featureGroup(markers).addTo(map);
+  if (fit && markers.length) map.fitBounds(mapLayers[activeLayer].getBounds(), { padding: [20, 20] });
+}
+
+/* ── Geographic bars ──────────────────────────────────────────── */
+function renderProvinces() {
+  const by = {};
+  for (const s of DATA.indigo_stores) {
+    const p = by[s.province] ||= { copies: 0, stores: 0, inStock: 0 };
+    p.copies += s.qty; p.stores += 1; p.inStock += s.qty > 0 ? 1 : 0;
+  }
+  const rows = Object.entries(by).sort((a, b) => b[1].copies - a[1].copies);
+  const max = Math.max(1, ...rows.map(r => r[1].copies));
+  const box = document.getElementById("provBars");
+  box.replaceChildren();
+  for (const [name, p] of rows) {
+    box.append(el("div", { class: "name", title: name }, name),
+      el("div", { class: "row" },
+        el("div", { class: "barbox" }, el("div", { class: "bar", style: `width:${100 * p.copies / max}%` })),
+        el("div", { class: "val" }, fmt(p.copies), " ", el("small", {}, `· ${p.inStock}/${p.stores} stores`))));
+  }
+}
+function renderStates() {
+  const by = {};
+  for (const s of DATA.bn_stores) {
+    const p = by[s.state] ||= { n: 0, inStock: 0 };
+    p.n += 1; p.inStock += s.available === 1 ? 1 : 0;
+  }
+  const rows = Object.entries(by).sort((a, b) => a[1].inStock / a[1].n - b[1].inStock / b[1].n || b[1].n - a[1].n);
+  const box = document.getElementById("stateBars");
+  box.replaceChildren();
+  for (const [st, p] of rows) {
+    const pct = Math.round(100 * p.inStock / p.n);
+    box.append(el("div", { class: "name" }, st),
+      el("div", { class: "row" },
+        el("div", { class: "track", role: "img", "aria-label": `${st}: ${pct}% in stock` }, el("i", { style: `width:${pct}%` })),
+        el("div", { class: "val" }, `${pct}%`, " ", el("small", {}, `· ${p.inStock}/${p.n}`))));
+  }
+}
+
+/* ── Line charts ──────────────────────────────────────────────── */
+const SVGNS = "http://www.w3.org/2000/svg";
+const svgEl = (tag, attrs) => { const e = document.createElementNS(SVGNS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); return e; };
+
+function niceTicks(lo, hi, count = 4) {
+  const span = hi - lo || Math.abs(hi) || 1;
+  const step0 = span / count, mag = Math.pow(10, Math.floor(Math.log10(step0)));
+  const step = [1, 2, 2.5, 5, 10].map(m => m * mag).find(s => s >= step0);
+  const ticks = [];
+  for (let v = Math.ceil(lo / step) * step; v <= hi + 1e-9; v += step) ticks.push(Math.round(v * 1e6) / 1e6);
+  return ticks;
+}
+const compact = v => Math.abs(v) >= 10000 ? (v / 1000).toLocaleString("en-US", { maximumFractionDigits: 1 }) + "K" : fmt(v);
+
+function lineChart(container, { title, caption, dates, series, invert = false, log = false, suffix = "", prefix = "" }) {
+  container.replaceChildren();
+  container.append(el("h2", {}, title), el("p", { class: "cap" }, caption));
+  if (series.length > 1) {
+    container.append(el("div", { class: "chart-legend" },
+      ...series.map(s => el("span", {}, el("i", { style: `background:${css(s.color)}` }), s.name))));
+  }
+  const wrap = el("div", { class: "chart" });
+  container.append(wrap);
+  const W = Math.max(260, wrap.clientWidth || container.clientWidth - 32), H = 170;
+  const m = { l: 46, r: 58, t: 10, b: 22 }, iw = W - m.l - m.r, ih = H - m.t - m.b;
+  const n = dates.length;
+  const all = series.flatMap(s => s.values.filter(v => v != null));
+  if (!all.length) { wrap.append(el("p", { class: "empty-note" }, "No data yet.")); return; }
+  const tf = v => log ? Math.log10(Math.max(1, v)) : v;
+  let lo = Math.min(...all.map(tf)), hi = Math.max(...all.map(tf));
+  if (hi - lo < 1e-9) { const pad = log ? 0.15 : Math.max(1, Math.abs(hi) * 0.1); lo -= pad; hi += pad; }
+  else { const pad = (hi - lo) * 0.08; lo -= pad; hi += pad; }
+  if (!log && !invert && Math.min(...all) >= 0 && lo < 0) lo = 0;
+  const x = i => m.l + (n === 1 ? iw / 2 : i * iw / (n - 1));
+  const y = v => { const t = (tf(v) - lo) / (hi - lo); return m.t + (invert ? t : 1 - t) * ih; };
+
+  const svg = svgEl("svg", { viewBox: `0 0 ${W} ${H}`, height: H, role: "img", "aria-label": title });
+  // Gridlines + y ticks
+  let ticks;
+  if (log) {
+    ticks = [];
+    for (let e = Math.floor(lo); e <= Math.ceil(hi); e++) for (const k of [1, 2, 5]) {
+      const v = k * Math.pow(10, e), tv = Math.log10(v); if (tv >= lo && tv <= hi) ticks.push(v);
+    }
+    if (ticks.length > 5) ticks = ticks.filter(v => /^1/.test(String(v)));
+  } else ticks = niceTicks(lo, hi);
+  for (const v of ticks) {
+    const yy = y(v);
+    svg.append(svgEl("line", { x1: m.l, x2: m.l + iw, y1: yy, y2: yy, stroke: css("--grid"), "stroke-width": 1 }));
+    const t = svgEl("text", { x: m.l - 8, y: yy + 4, "text-anchor": "end", fill: css("--muted"), "font-size": 11 });
+    t.textContent = prefix + compact(v) + suffix; svg.append(t);
+  }
+  // X labels: first, last, and a middle one when there is room
+  const xi = n <= 1 ? [0] : n <= 3 ? [...Array(n).keys()] : [0, Math.floor((n - 1) / 2), n - 1];
+  for (const i of xi) {
+    const t = svgEl("text", { x: x(i), y: H - 4, "text-anchor": n === 1 ? "middle" : i === 0 ? "start" : i === n - 1 ? "end" : "middle", fill: css("--muted"), "font-size": 11 });
+    t.textContent = shortDate(dates[i]); svg.append(t);
+  }
+  // Series
+  const surface = css("--surface");
+  for (const s of series) {
+    const color = css(s.color);
+    const pts = s.values.map((v, i) => v == null ? null : [x(i), y(v)]);
+    let dpath = "", pen = false;
+    pts.forEach(p => { if (!p) { pen = false; return; } dpath += (pen ? "L" : "M") + p[0].toFixed(1) + "," + p[1].toFixed(1); pen = true; });
+    if (n > 1) svg.append(svgEl("path", { d: dpath, fill: "none", stroke: color, "stroke-width": 2, "stroke-linejoin": "round", "stroke-linecap": "round" }));
+    const lastIdx = s.values.map(v => v != null).lastIndexOf(true);
+    if (lastIdx >= 0) {
+      const [lx, ly] = pts[lastIdx];
+      svg.append(svgEl("circle", { cx: lx, cy: ly, r: 4, fill: color, stroke: surface, "stroke-width": 2 }));
+      const t = svgEl("text", { x: lx + 8, y: ly + 4, fill: css("--ink"), "font-size": 11.5, "font-weight": 600 });
+      t.textContent = prefix + compact(s.values[lastIdx]) + suffix; svg.append(t);
+    }
+  }
+  // Crosshair + tooltip
+  const cross = svgEl("line", { y1: m.t, y2: m.t + ih, stroke: css("--axis"), "stroke-width": 1, visibility: "hidden" });
+  svg.append(cross);
+  const hit = svgEl("rect", { x: m.l - 10, y: 0, width: iw + 20, height: H, fill: "transparent" });
+  svg.append(hit);
+  wrap.append(svg);
+  const tip = el("div", { class: "tip" });
+  wrap.append(tip);
+  const show = i => {
+    cross.setAttribute("x1", x(i)); cross.setAttribute("x2", x(i)); cross.setAttribute("visibility", "visible");
+    tip.replaceChildren(el("div", { class: "d" }, shortDate(dates[i])),
+      ...series.map(s => el("div", { class: "r" }, el("i", { style: `background:${css(s.color)}` }),
+        el("b", {}, s.values[i] == null ? "—" : prefix + fmt(s.values[i]) + suffix), el("span", {}, s.name))));
+    tip.style.display = "block";
+    const left = Math.min(Math.max(0, x(i) / W * wrap.clientWidth + 10), wrap.clientWidth - tip.offsetWidth);
+    tip.style.left = left + "px"; tip.style.top = "4px";
+  };
+  hit.addEventListener("pointermove", ev => {
+    const r = svg.getBoundingClientRect(), px = (ev.clientX - r.left) * W / r.width;
+    show(n === 1 ? 0 : Math.max(0, Math.min(n - 1, Math.round((px - m.l) / iw * (n - 1)))));
+  });
+  hit.addEventListener("pointerleave", () => { tip.style.display = "none"; cross.setAttribute("visibility", "hidden"); });
+}
+
+function renderTrends() {
+  const h = DATA.history, dates = h.map(r => r.date), col = k => h.map(r => r[k]);
+  document.getElementById("trendCap").textContent = h.length < 2
+    ? "Only one daily snapshot so far. Lines appear from the second day."
+    : `${h.length} daily snapshots, ${shortDate(dates[0])} – ${shortDate(dates[dates.length - 1])}.`;
+  const charts = [
+    { title: "Amazon.com rank", caption: "Best Sellers Rank, log scale, higher on chart = better", invert: true, log: true, prefix: "#",
+      series: [{ name: "Paperback", color: "--s1", values: col("amazon_com_paperback_rank") },
+               { name: "Kindle", color: "--s2", values: col("amazon_com_kindle_rank") },
+               { name: "Audible", color: "--s3", values: col("amazon_com_audible_rank") }] },
+    { title: "Amazon.ca rank", caption: "Best Sellers Rank, log scale, higher on chart = better", invert: true, log: true, prefix: "#",
+      series: [{ name: "Paperback", color: "--s1", values: col("amazon_ca_paperback_rank") },
+               { name: "Kindle", color: "--s2", values: col("amazon_ca_kindle_rank") }] },
+    { title: "Copies on Indigo shelves", caption: "Total copies on hand at named stores",
+      series: [{ name: "Copies", color: "--s1", values: col("indigo_store_copies") }] },
+    { title: "Indigo shelf drawdown", caption: "Copies that left store shelves since the previous day (sales proxy)",
+      series: [{ name: "Copies out", color: "--s1", values: col("indigo_shelf_drawdown") }] },
+    { title: "Indigo warehouse & online stock", caption: "Copies at non-store locations",
+      series: [{ name: "Copies", color: "--s1", values: col("indigo_dc_and_other_copies") }] },
+    { title: "B&N stores in stock", caption: "Share of stores showing in stock", suffix: "%",
+      series: [{ name: "In stock", color: "--s1", values: col("bn_pct_in_stock") }] },
+    { title: "Goodreads want to read", caption: "Readers shelving the book",
+      series: [{ name: "Want to read", color: "--s1", values: col("goodreads_want_to_read") }] },
+    { title: "Goodreads ratings", caption: "Total ratings",
+      series: [{ name: "Ratings", color: "--s1", values: col("goodreads_rating_count") }] },
+    { title: "Library holds", caption: "Holds across tracked library systems",
+      series: [{ name: "US", color: "--s1", values: col("library_us_holds") },
+               { name: "Canada", color: "--s2", values: col("library_ca_holds") }] },
+  ];
+  const box = document.getElementById("trends");
+  // Lay out every card before measuring any: an auto-fit grid stretches a lone card full-width.
+  const cards = charts.map(() => el("div", { class: "card" }));
+  box.replaceChildren(...cards);
+  charts.forEach((c, i) => lineChart(cards[i], { dates, ...c }));
+}
+
+/* ── Tables ───────────────────────────────────────────────────── */
+// head: [label, numeric?, wrap?]
+function table(id, head, rows) {
+  const t = document.getElementById(id);
+  t.replaceChildren(el("thead", {}, el("tr", {}, ...head.map(([label, num]) => el("th", { class: num ? "n" : "" }, label)))));
+  const body = el("tbody");
+  for (const r of rows) body.append(el("tr", {}, ...r.map((v, i) =>
+    el("td", { class: head[i][1] ? "n" : head[i][2] ? "wrapcell" : "" }, v))));
+  t.append(body);
+}
+const PROV = { "Ontario": "ON", "Quebec": "QC", "British Columbia": "BC", "Alberta": "AB", "Manitoba": "MB",
+  "Saskatchewan": "SK", "Nova Scotia": "NS", "New Brunswick": "NB", "Newfoundland and Labrador": "NL",
+  "Prince Edward Island": "PE", "Yukon": "YT", "Northwest Territories": "NT", "Nunavut": "NU" };
+function renderTables() {
+  const fmtName = { paperback: "Paperback", kindle: "Kindle", audible: "Audible" };
+  table("amazonTbl", [["Format"], ["Store"], ["Rank", 1], ["Rating", 1], ["Best category", 0, 1]],
+    DATA.amazon.map(a => {
+      const top = (a.category_ranks || []).slice().sort((p, q) => p[0] - q[0])[0];
+      return [fmtName[a.format] || a.format, `.${a.marketplace}`,
+        a.overall_rank ? "#" + fmt(a.overall_rank) : "—",
+        a.rating_avg ? `★ ${a.rating_avg} (${fmt(a.rating_count)})` : "—",
+        top ? `#${fmt(top[0])} in ${top[1]}` : "—"];
+    }));
+
+  const pair = (c, h) => `${fmt(c)} / ${fmt(h)}`;
+  table("libTbl", [["Library", 0, 1], ["Ebook copies / holds", 1], ["Audio copies / holds", 1]],
+    DATA.libraries.slice().sort((a, b) => ((b.ebook_holds_count || 0) + (b.audiobook_holds_count || 0)) - ((a.ebook_holds_count || 0) + (a.audiobook_holds_count || 0)))
+      .map(l => [`${l.name} (${l.country})`, pair(l.ebook_owned_copies, l.ebook_holds_count),
+                 pair(l.audiobook_owned_copies, l.audiobook_holds_count)]));
+
+  const lists = DATA.lists;
+  if (lists.length) {
+    table("listTbl", [["Date"], ["Source"], ["List"], ["Rank", 1], ["Weeks", 1]],
+      lists.map(l => [l.list_date, l.list_source.toUpperCase(), l.list_name, "#" + l.rank, fmt(l.weeks_on_list)]));
+  } else {
+    table("listTbl", [["No list appearances recorded yet"]], []);
+  }
+
+  const renderStores = q => {
+    const ql = q.trim().toLowerCase();
+    const rows = DATA.indigo_stores.filter(s => !ql || `${s.banner} ${s.name} ${s.city} ${s.province}`.toLowerCase().includes(ql));
+    table("storeTbl", [["Store", 0, 1], ["Copies", 1], ["Change", 1], ["Location", 0, 1]],
+      rows.map(s => {
+        const ch = s.prev_qty == null ? null : s.qty - s.prev_qty;
+        return [`${s.banner} ${s.name}`, fmt(s.qty), ch == null ? "—" : ch === 0 ? "0" : (ch > 0 ? "+" : "") + ch,
+                `${s.city}, ${PROV[s.province] || s.province}`];
+      }));
+  };
+  const search = document.getElementById("storeSearch");
+  search.oninput = () => renderStores(search.value);
+  renderStores(search.value);
+}
+
+let resizeT;
+addEventListener("resize", () => { clearTimeout(resizeT); resizeT = setTimeout(() => DATA && renderTrends(), 150); });
+</script>
+</body>
+</html>
