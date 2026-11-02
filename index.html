@@ -446,7 +446,7 @@ function niceTicks(lo, hi, count = 4) {
 }
 const compact = v => Math.abs(v) >= 10000 ? (v / 1000).toLocaleString("en-US", { maximumFractionDigits: 1 }) + "K" : fmt(v);
 
-function lineChart(container, { title, caption, dates, series, invert = false, log = false, suffix = "", prefix = "" }) {
+function lineChart(container, { title, caption, dates, series, extra = null, invert = false, log = false, suffix = "", prefix = "" }) {
   container.replaceChildren();
   container.append(el("h2", {}, title), el("p", { class: "cap" }, caption));
   if (series.length > 1) {
@@ -518,7 +518,8 @@ function lineChart(container, { title, caption, dates, series, invert = false, l
     cross.setAttribute("x1", x(i)); cross.setAttribute("x2", x(i)); cross.setAttribute("visibility", "visible");
     tip.replaceChildren(el("div", { class: "d" }, shortDate(dates[i])),
       ...series.map(s => el("div", { class: "r" }, el("i", { style: `background:${css(s.color)}` }),
-        el("b", {}, s.values[i] == null ? "—" : prefix + fmt(s.values[i]) + suffix), el("span", {}, s.name))));
+        el("b", {}, s.values[i] == null ? "—" : prefix + fmt(s.values[i]) + suffix), el("span", {}, s.name))),
+      ...(extra && extra(i) ? [el("div", { class: "d", style: "font-size:11px;margin-top:2px" }, extra(i))] : []));
     tip.style.display = "block";
     const left = Math.min(Math.max(0, x(i) / W * wrap.clientWidth + 10), wrap.clientWidth - tip.offsetWidth);
     tip.style.left = left + "px"; tip.style.top = "4px";
@@ -549,8 +550,9 @@ function renderTrends() {
       series: [{ name: "Copies out", color: "--s1", values: col("indigo_shelf_drawdown") }] },
     { title: "Indigo warehouse & online stock", caption: "Copies at non-store locations",
       series: [{ name: "Copies", color: "--s1", values: col("indigo_dc_and_other_copies") }] },
-    { title: "B&N stores in stock", caption: "Share of stores showing in stock", suffix: "%",
-      series: [{ name: "In stock", color: "--s1", values: col("bn_pct_in_stock") }] },
+    { title: "B&N stores in stock", caption: "Stores showing in stock (hover for share of stores checked)",
+      series: [{ name: "In stock", color: "--s1", values: col("bn_stores_in_stock") }],
+      extra: i => h[i].bn_pct_in_stock == null ? null : `${h[i].bn_pct_in_stock}% of ${fmt(h[i].bn_stores_checked)} stores` },
     { title: "Goodreads want to read", caption: "Readers shelving the book",
       series: [{ name: "Want to read", color: "--s1", values: col("goodreads_want_to_read") }] },
     { title: "Goodreads ratings", caption: "Total ratings",
