@@ -291,7 +291,8 @@ function renderTiles(cur, prev) {
     { label: "Indigo warehouse & online", value: fmt(cur.indigo_dc_and_other_copies), key: "indigo_dc_and_other_copies", dir: 0,
       detail: "copies at non-store locations" },
     { label: "B&N stores in stock", value: fmt(cur.bn_stores_in_stock), key: "bn_stores_in_stock", dir: 0,
-      detail: `${cur.bn_pct_in_stock == null ? "—" : cur.bn_pct_in_stock + "%"} of ${fmt(cur.bn_stores_checked)} stores` },
+      detail: `${cur.bn_pct_in_stock == null ? "—" : cur.bn_pct_in_stock + "%"} of ${fmt(cur.bn_stores_checked)} stores`,
+      breakdown: cur.bn_sold_out == null ? null : `${fmt(cur.bn_restocked)} restocked · ${fmt(cur.bn_sold_out)} sold out` },
     { label: "Amazon.com Kindle rank", value: cur.amazon_com_kindle_rank ? "#" + fmt(cur.amazon_com_kindle_rank) : "—", key: "amazon_com_kindle_rank", dir: -1,
       detail: `paperback #${fmt(cur.amazon_com_paperback_rank)} · Audible #${fmt(cur.amazon_com_audible_rank)}` },
     { label: "Goodreads want to read", value: fmt(cur.goodreads_want_to_read), key: "goodreads_want_to_read", dir: 1,
@@ -313,7 +314,8 @@ function renderTiles(cur, prev) {
     box.append(el("div", { class: "card tile" },
       el("div", { class: "label" }, t.label),
       el("div", { class: "value" }, t.value, delta),
-      el("div", { class: "detail" }, t.detail)));
+      el("div", { class: "detail" }, t.detail),
+      t.breakdown ? el("div", { class: "detail", title: "Stores that changed status since the previous snapshot" }, t.breakdown) : null));
   }
 }
 
