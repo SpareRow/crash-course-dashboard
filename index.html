@@ -182,6 +182,18 @@ footer li { margin-bottom: 4px; }
     <h2 class="section">Detail</h2>
     <div class="grid2">
       <div class="card">
+        <h2>B&amp;N sell-outs per store</h2>
+        <p class="cap" id="selloutCap"></p>
+        <div class="bars" id="selloutBars"></div>
+      </div>
+      <div class="card">
+        <h2>B&amp;N stores that have sold out</h2>
+        <p class="cap">Most sell-outs first, then most recent; "Last" is the latest sell-out</p>
+        <div class="tbl-wrap tall"><table id="selloutTbl"></table></div>
+      </div>
+    </div>
+    <div class="grid2">
+      <div class="card">
         <h2>Amazon</h2>
         <p class="cap">Best Sellers Rank (lower is better). Ratings are shared across formats.</p>
         <div class="tbl-wrap"><table id="amazonTbl"></table></div>
@@ -214,6 +226,7 @@ footer li { margin-bottom: 4px; }
       <li><b>Indigo shelf drawdown</b> counts copies that left named stores since the previous day: mostly sales, plus some transfers and returns. A same-day restock hides sales, so read weekly totals.</li>
       <li><b>Indigo warehouse &amp; online</b> is stock at locations that aren't stores (distribution centres, online fulfilment, plus a few stores not yet identified).</li>
       <li><b>Barnes &amp; Noble</b> only shows whether a store has the book, not how many copies.</li>
+      <li><b>B&amp;N sell-outs</b> count a store going from in stock to out between two daily snapshots, starting Nov 1. A store that sold out and restocked within a day isn't counted, and a store's last copy being returned looks the same as a sale.</li>
       <li>Collected once a day from public retailer pages. <span id="generated"></span></li>
     </ul>
   </footer>
@@ -276,6 +289,7 @@ function render() {
   renderProvinces();
   renderStates();
   renderTrends();
+  renderSellouts();
   renderTables();
 }
 function rerender() { if (DATA) { renderMapTiles(); renderMapLayers(); renderTrends(); } }
@@ -431,6 +445,29 @@ function renderStates() {
       el("div", { class: "row" },
         el("div", { class: "track", role: "img", "aria-label": `${st}: ${pct}% in stock` }, el("i", { style: `width:${pct}%` })),
         el("div", { class: "val" }, `${pct}%`, " ", el("small", {}, `· ${p.inStock}/${p.n}`))));
+  }
+}
+function renderSellouts() {
+  const { stores, no_sellouts, never_stocked } = DATA.bn_sellouts;
+  document.getElementById("selloutCap").textContent =
+    `Stores by number of times they've sold out. ${fmt(no_sellouts)} other stores have had it without selling out; ${fmt(never_stocked)} have never shown it in stock.`;
+  const top = Math.max(3, ...stores.map(s => s.times));
+  const counts = Array.from({ length: top }, (_, i) => stores.filter(s => s.times === i + 1).length);
+  const max = Math.max(1, ...counts);
+  const box = document.getElementById("selloutBars");
+  box.replaceChildren();
+  counts.forEach((n, i) => {
+    box.append(el("div", { class: "name" }, i ? `${i + 1} times` : "1 time"),
+      el("div", { class: "row" },
+        el("div", { class: "barbox" }, el("div", { class: "bar", style: `width:${100 * n / max}%;${n ? "" : "min-width:0"}` })),
+        el("div", { class: "val" }, fmt(n), " ", el("small", {}, n === 1 ? "store" : "stores"))));
+  });
+  if (stores.length) {
+    table("selloutTbl", [["Store", 0, 1], ["Times", 1], ["Last"], ["Now"]],
+      stores.map(s => [`${s.name}, ${s.state}`, fmt(s.times), shortDate(s.last_date),
+                       s.available === 1 ? "In stock" : "Out"]));
+  } else {
+    table("selloutTbl", [["No sell-outs recorded yet"]], []);
   }
 }
 
