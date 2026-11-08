@@ -224,7 +224,7 @@ footer li { margin-bottom: 4px; }
     <ul>
       <li><b>These are proxies, not sales.</b> Real point-of-sale numbers come from BookScan (PRH Author Portal) and BookNet Canada.</li>
       <li><b>Indigo shelf drawdown</b> counts copies that left named stores since the previous day: mostly sales, plus some transfers and returns. A same-day restock hides sales, so read weekly totals.</li>
-      <li><b>Indigo warehouse &amp; online</b> is stock at locations that aren't stores (distribution centres, online fulfilment, plus a few stores not yet identified).</li>
+      <li><b>Indigo warehouse &amp; online</b> is stock at locations that aren't stores (distribution centres, online fulfilment, plus a few stores not yet identified). It leaves out one unidentified location that has shown exactly 2,000 copies every day and may be a placeholder.</li>
       <li><b>Barnes &amp; Noble</b> only shows whether a store has the book, not how many copies.</li>
       <li><b>B&amp;N sell-outs</b> count a store going from in stock to out between two daily snapshots, starting Nov 1. A store that sold out and restocked within a day isn't counted, and a store's last copy being returned looks the same as a sale.</li>
       <li>Collected once a day from public retailer pages. <span id="generated"></span></li>
@@ -303,7 +303,7 @@ function renderTiles(cur, prev) {
     { label: "Copies on Indigo shelves", value: fmt(cur.indigo_store_copies), key: "indigo_store_copies", dir: 0,
       detail: `at ${fmt(cur.indigo_stores_in_stock)} of ${fmt(cur.indigo_stores_named)} stores` },
     { label: "Indigo warehouse & online", value: fmt(cur.indigo_dc_and_other_copies), key: "indigo_dc_and_other_copies", dir: 0,
-      detail: "copies at non-store locations" },
+      detail: "at non-store locations, excl. one unverified" },
     { label: "B&N stores in stock", value: fmt(cur.bn_stores_in_stock), key: "bn_stores_in_stock", dir: 0,
       detail: `${cur.bn_pct_in_stock == null ? "—" : cur.bn_pct_in_stock + "%"} of ${fmt(cur.bn_stores_checked)} stores`,
       breakdown: cur.bn_sold_out == null ? null : `${fmt(cur.bn_restocked)} restocked · ${fmt(cur.bn_sold_out)} sold out` },
